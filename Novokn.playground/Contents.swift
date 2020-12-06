@@ -4,109 +4,177 @@ enum BallonState {
     case inflated, deflated
 }
 
-class Ballon {
-    let color: UIColor
-    let label: String?
-    var ballonState: BallonState
+protocol Ballon {
+    var color: UIColor { get }
+    var label: String? { get }
+    var ballonState: BallonState { get set }
     
-    init(color: UIColor, label: String?, ballonState: BallonState) {
-        self.color = color
-        self.label = label
-        self.ballonState = .deflated
-    }
-    
-    convenience init(color: UIColor) {
-        self.init(color: color, label: nil, ballonState: .deflated)
-    }
-    
-    func inflateBallon() {
-        ballonState = ballonState == .deflated ? .inflated : .deflated
-    }
+    func inflateBallon()
 }
 
 enum FareState {
     case isOn, isOff
 }
 
-enum BallonAeronauticsAction {
-    case changeFireState
-    case putSandbag(Int)
-    case abortSandbag
+enum BallonAeronauticsError: Error {
+    case sandbagsOutOfStock
+    case fareStateIsOff
 }
 
 class BallonAeronautics: Ballon {
+    let color: UIColor
+    let label: String?
+    var ballonState: BallonState
     var sandbag: Int
     var fireState: FareState
     var height: Int
     
     init(color: UIColor, label: String?, ballonState: BallonState, sandbag: Int, fareState: FareState, height: Int) {
+        self.color = color
+        self.label = label
+        self.ballonState = ballonState
         self.sandbag = sandbag
         self.fireState = fareState
         self.height = height
-        super.init(color: color, label: label, ballonState: ballonState)
     }
     
     convenience init(color: UIColor) {
         self.init(color: color, label: nil, ballonState: .deflated, sandbag: 0, fareState: .isOff, height: 0)
     }
     
-    func makeAction (action: BallonAeronauticsAction) {
-        switch action {
-        case .changeFireState:
-            fireState = fireState == .isOff ? .isOn : .isOff
-            ballonState = fireState == .isOn ? .inflated : .deflated
-            print("Состояние огня - \(fireState)")
-        case .putSandbag(let number):
-            sandbag += number
-            print("Теперь есть \(sandbag) мешков с песком. Полетели!")
-        case .abortSandbag:
-            if sandbag > 0 {
-                sandbag -= 1
-            }
-            if sandbag == 0 {
-                print("Мешков нет - пора выкидывать людей")
-            } else {
-                print("Теперь есть \(sandbag) мешков с песком")
-            }
+    func inflateBallon() {
+        ballonState = ballonState == .deflated ? .inflated : .deflated
+        self.fireState = .isOn
+    }
+    
+    func putSandbag(amount: Int) {
+        sandbag += amount
+        print("Теперь есть \(sandbag) мешков с песком.")
+    }
+    
+    func abortSandbag() -> (Int?, BallonAeronauticsError?) {
+        guard sandbag > 0 else { return (nil, .sandbagsOutOfStock) }
+        sandbag -= 1
+        height += 5
+        return (sandbag, nil)
+    }
+    
+    func letsGoToHeight() -> (Int?, BallonAeronauticsError?) {
+        guard fireState == .isOn else {return (nil, .fareStateIsOff) }
+        guard sandbag > 0 else {return (nil, .sandbagsOutOfStock) }
+        print("Полетели!")
+        height += 10
+        return (height, nil)
+    }
+}
+
+var ballon = BallonAeronautics(color: .red)
+ballon.inflateBallon()
+ballon.putSandbag(amount: 10)
+ballon.letsGoToHeight()
+var ballonHeight = ballon.letsGoToHeight()
+if let newHeigth = ballonHeight.0 {
+    print("Мы поднялись на высоту \(newHeigth)")
+} else if let error = ballonHeight.1 {
+    print("Произошла ошибка: \(error.localizedDescription)")
+}
+
+enum OvenError: Error {
+    case ovenIsEmpty
+    case ovenIsFull
+    case ovenIsOn
+    case ovenIsOff
+    case ovenIsClean
+    case ovenIsDirty
+}
+
+enum OvenState {
+    case clean, dirty
+}
+
+class Oven {
+    var ingredients = [String]()
+    var temperature: Double = 0
+    var ovenState: OvenState = .clean
+    
+    func putIngredient(ingredient: String) {
+        ingredients.append(ingredient)
+    }
+    
+    func setTemperature(temperature: Double) {
+        self.temperature = temperature
+    }
+    
+    func cook() throws -> String {
+        guard ovenState == .clean else {
+            throw OvenError.ovenIsDirty
         }
-    }
-}
-
-class PartyBallon: Ballon {
-    var size: Int
-    
-    init(color: UIColor, label: String?, ballonState: BallonState, size: Int) {
-        self.size = size
-        super.init(color: color, label: label, ballonState: ballonState)
-    }
-    
-    convenience init(color: UIColor) {
-        self.init(color: color, label: nil, ballonState: .deflated, size: 1)
-    }
-    
-    override func inflateBallon() {
-        super.inflateBallon()
-        size *= 5
-        if let hadLabel = label {
-            print("Шарик с надписью '\(hadLabel)' надули, он стал \(size) размера")
-        } else {
-            print("Обычный шарик надули, он стал \(size) размера")
+        guard ingredients.count > 0 else {
+            throw OvenError.ovenIsEmpty
         }
+        guard temperature > 0 else {
+            throw OvenError.ovenIsOff
+        }
+        var newMeal = "baked"
+        for ingredient in ingredients {
+            newMeal += ingredient
+            ingredients.removeFirst()
+            }
+        self.ovenState = .dirty
+        return newMeal
+    }
+    
+    func clean() throws {
+        guard ingredients.count == 0 else {
+            throw OvenError.ovenIsFull
+        }
+        guard ovenState != .clean else {
+            throw OvenError.ovenIsClean
+        }
+        guard temperature == 0 else {
+            throw OvenError.ovenIsOn
+        }
+        ovenState = .clean
     }
 }
 
-let ballon1 = PartyBallon(color: .red, label: "Амиру!", ballonState: .deflated, size: 2)
-let ballon2 = PartyBallon(color: .green)
-let ballon3 = PartyBallon(color: .yellow, label: nil, ballonState: .deflated, size: 4)
-let ballon4 = PartyBallon(color: .blue, label: "С днём рождения!", ballonState: .deflated, size: 3)
+let myOven = Oven()
+myOven.putIngredient(ingredient: "apple")
+myOven.putIngredient(ingredient: "sugar")
+myOven.putIngredient(ingredient: "oatmeal")
+myOven.setTemperature(temperature: 120.0)
 
-let ballonsForParty = [ballon1, ballon2, ballon3, ballon4]
-for ballon in ballonsForParty {
-    ballon.inflateBallon()
+do {
+    try myOven.cook()
+} catch OvenError.ovenIsOff {
+    print("Духовка выключена - так не приготовить!")
+} catch OvenError.ovenIsEmpty {
+    print("Духовка пустая - надо что-то положить!")
+} catch OvenError.ovenIsDirty {
+    print("Духовка грязная - сначала надо помыть!")
 }
 
-let ballon5 = BallonAeronautics(color: .orange)
-ballon5.makeAction(action: .putSandbag(2))
-ballon5.makeAction(action: .changeFireState)
-ballon5.makeAction(action: .abortSandbag)
+myOven.setTemperature(temperature: 0.0)
 
+do {
+    try myOven.clean()
+} catch OvenError.ovenIsOn {
+    print("Духовка работает - не надо мыть")
+} catch OvenError.ovenIsFull {
+    print("Духовка не пустая")
+} catch OvenError.ovenIsClean {
+    print("Духовка чистая - не надо мыть.")
+}
+
+myOven.putIngredient(ingredient: "fish")
+myOven.setTemperature(temperature: 180.0)
+
+do {
+    try myOven.cook()
+} catch OvenError.ovenIsOff {
+    print("Духовка выключена - так не приготовить!")
+} catch OvenError.ovenIsEmpty {
+    print("Духовка пустая - надо что-то положить!")
+} catch OvenError.ovenIsDirty {
+    print("Духовка грязная - сначала надо помыть!")
+}
